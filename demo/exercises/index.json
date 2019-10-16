@@ -1,0 +1,19 @@
+{ "learnocaml_version": "1",
+  "groups":
+  	{ "Exercices avec easy-check":
+	    { "title": "Exercices avec easy-check",
+	    
+	      "groups":
+		    {
+		        "Exercices avec easy-check":
+		        {
+			    "title": "Demo d'easy-check",
+			    "exercises": [
+		                "exo1"
+		            ]
+		        
+		}
+	}
+}
+}
+}
