@@ -1,16 +1,16 @@
-open Test_env
+open Protect
 
 let value ?(modname="Code") name ty = 
     match I.get_value (modname ^ "." ^ name) ty with 
     | I.Present v -> v
-    | I.Incompatible msg ->
+    | I.Incompatible msg -> 
        fail ([R.Message ([Text "Found"; 
                           Code name;
                           Text "with unexpected type:";
                           Break;
                           Code msg], Failure)])
     | I.Absent -> fail ([R.Message ([Text "Cannot find " ;
-                                     Code name ], Failure)])
+                                     Code name ;Text "."], Failure)])
 
 let code ty =
    match I.get_value "Code" ty with 

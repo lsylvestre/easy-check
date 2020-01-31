@@ -1,4 +1,4 @@
-open Test_env
+open Protect
 
 let default_stdout_equal = ref (fun s1 s2 -> true)
 let default_stderr_equal = ref (fun s1 s2 -> true)
@@ -20,15 +20,15 @@ module Check_tools = struct
       ('a testresult -> 'a testresult -> bool)
                
     val instance :
-      test:('a -> 'b) ->
-      expect:('a -> 'b) ->
+      code:('a -> 'b) ->
+      solution:('a -> 'b) ->
       uncurry:(('a -> 'b) -> ('c -> 'd)) ->
       ?equal:('d -> 'd -> bool) ->
       ?exn_equal:(exn -> exn -> bool) ->
       ?stdout_equal:(stdio -> stdio -> bool) ->
       ?stderr_equal:(stdio -> stdio -> bool) ->
       unit ->
-      ('c, 'd testresult) Check_support.instance
+      ('c, 'd testresult) Falsify.instance
   end = 
     struct
       type 'a testresult = ('a * stdio * stderr) Test_lib.result
@@ -46,13 +46,13 @@ module Check_tools = struct
             -> (equal x1 x2) && (stdout_equal stdout1 stdout2) && (stderr_equal stderr1 stderr2)
           | _ -> false )
 
-      let instance ~test ~expect ~uncurry ?equal ?exn_equal ?stdout_equal ?stderr_equal () =
+      let instance ~code ~solution ~uncurry ?equal ?exn_equal ?stdout_equal ?stderr_equal () =
         let exec f x = T.exec (fun () -> f x) in
-        let w_test   = exec (uncurry test)
-        and w_expect = exec (uncurry expect) in
-        Check_support.{ 
-            test   = w_test;
-            expect = w_expect;
+        let w_test   = exec (uncurry code)
+        and w_expect = exec (uncurry solution) in
+        Falsify.{ 
+            code   = w_test;
+            solution = w_expect;
             equal  = equalize ?equal ?exn_equal ?stdout_equal ?stderr_equal ()
         }
     end
@@ -64,7 +64,7 @@ module Check_tools = struct
         let counterexample = ref None in
         try 
           let falsify x = 
-            match Check_support.falsify prop x with
+            match Falsify.falsify prop x with
               | None -> ()
               | ex -> counterexample := ex; raise Abort in
           List.iter falsify samples;
@@ -87,7 +87,7 @@ module Check_report :
       string ->
       ('a -> string) ->
       ('b -> string) ->
-      ('a, 'b Check_tools.Wrap.testresult) Check_support.counterexample -> 
+      ('a, 'b Check_tools.Wrap.testresult) Falsify.counterexample -> 
       Report.t
 
   end = struct 
@@ -113,6 +113,10 @@ module Check_report :
               @ message in
       [R.Message (m,R.Failure)]
 
+    let string_of_exc = function
+    | Match_failure _ -> "Match_failure _"
+    | e -> string_of_exc e ;;
+
     let unexpected_value s = 
       [R.Text "... produces the following value:";
        R.Output s;
@@ -129,7 +133,7 @@ module Check_report :
     and expected_value s =
       [R.Text "Producing the following value is correct:"; 
        R.Output s; R.Break]
-    and expected_exc e =
+    and expected_exc e = 
       [R.Text "Raising the following exception is correct:"; 
        R.Output (string_of_exc e); R.Break]
     and expected_writing oc_name s =
@@ -144,15 +148,13 @@ module Check_report :
       [R.Message (report,R.Failure)]
 
     let make_report_from_counterexample equal source show_argument show_result (counterexample as c) = 
-      let open Check_support in
-      let x        = c.witness
-      and tested   = c.tested
-      and expected = c.expected in
+      let open Falsify in
       let r = ref [R.Text "The following expression:";
                    R.Break;
-                   R.Output (source ^ " " ^ show_argument x) ; R.Break] in
+                   R.Output (source ^ " " ^ show_argument c.x0) ; R.Break] in
       let () =
-        match tested,expected with
+        match c.code_x0,c.solution_x0 with
+        | Error (Fail r) , _ | _ , Error (Fail r) -> fail r
         | Ok (y0,_,_), Error e -> 
            r := !r @ unexpected_value (show_result y0) @ expected_exc e
         | Ok (y0,stdout0,stderr0), Ok (y,stdout,stderr) -> 
@@ -227,12 +229,12 @@ module Safe = struct
 
   exception Counterexample of Report.t
 
-  let check currying ~show_argument ~show_result 
-        ~code ~against ~source
+  let check ~uncurry ~show_argument ~show_result 
+        ~code ~solution ~source
         ?(equal=(=)) ?exn_equal ?stdout_equal ?stderr_equal ?(testers=[]) samples =
     
     let instance = 
-      Check_tools.Wrap.instance ~test:code ~expect:against ~uncurry:currying 
+      Check_tools.Wrap.instance ~code:code ~solution:solution ~uncurry:uncurry 
          ~equal:equal ?exn_equal ?stdout_equal ?stderr_equal () in
     try 
       let () =  
@@ -254,7 +256,7 @@ module Safe = struct
 
 let support uncurry_n domains_n show_n ty =
  let (tyx,tyr) = domains_n ty in 
- check uncurry_n ~show_argument:(show_n tyx) ~show_result:(show1 tyr) 
+ check ~uncurry:uncurry_n ~show_argument:(show_n tyx) ~show_result:(show1 tyr) 
 
   let arity1 ~ty = support uncurry1 domains1 show1 ty
   let arity2 ~ty = support uncurry2 domains2 show2 ty
@@ -263,25 +265,45 @@ let support uncurry_n domains_n show_n ty =
   let arity5 ~ty = support uncurry5 domains5 show5 ty
 end
 
-let single_suport arity_n ty code = 
-  let open Safe in
-  let vcode =    Get.value ~modname:"Code"     code ty
-  and vsolution = Get.value ~modname:"Solution" code ty in
-  arity_n ~ty:ty ~code:vcode ~against:vsolution ~source:code
+let check ~show_argument = Safe.check ~uncurry:Adapter.uncurry1  ~show_argument:show_argument
 
-let name1 code ty = single_suport Safe.arity1 ty code
-let name2 code ty = single_suport Safe.arity2 ty code
-let name3 code ty = single_suport Safe.arity3 ty code
-let name4 code ty = single_suport Safe.arity4 ty code
-let name5 code ty = single_suport Safe.arity5 ty code
+let single_suport arity_n ty code apply = 
+  let open Safe in
+  let vcode x = apply (Get.value ~modname:"Code" code ty) x
+  and vsolution = (Get.value ~modname:"Solution" code ty) in
+  arity_n ~ty:ty ~code:vcode ~solution:vsolution ~source:code
+
+open Falsify
+
+type ('v,'args,'ret) check = 
+  'v Ty.ty ->
+  ?apply:('v -> 'v) -> 
+  ?equal:('ret -> 'ret -> bool) ->
+  ?exn_equal:(exn -> exn -> bool) ->
+  ?stdout_equal:(string -> string -> bool) ->
+  ?stderr_equal:(string -> string -> bool) ->
+  ?testers:(('args, 'ret testresult) tester list) ->
+  'args list -> Report.t
+
+type name = string
+type 'e expr = 'e * 'e * string
+
+let identity x = x
+
+let name1 code ty ?(apply=identity) = single_suport Safe.arity1 ty code apply
+let name2 code ty ?(apply=identity) = single_suport Safe.arity2 ty code apply
+let name3 code ty ?(apply=identity) = single_suport Safe.arity3 ty code apply
+let name4 code ty ?(apply=identity) = single_suport Safe.arity4 ty code apply
+let name5 code ty ?(apply=identity) = single_suport Safe.arity5 ty code apply
+
 
 let brackets source = "(" ^ source ^ ")"
 
-let expr1 (v,a,s) ty = Safe.arity1 ~ty:ty ~code:v ~against:a ~source:(brackets s)
-let expr2 (v,a,s) ty = Safe.arity2 ~ty:ty ~code:v ~against:a ~source:(brackets s)
-let expr3 (v,a,s) ty = Safe.arity3 ~ty:ty ~code:v ~against:a ~source:(brackets s)
-let expr4 (v,a,s) ty = Safe.arity4 ~ty:ty ~code:v ~against:a ~source:(brackets s)
-let expr5 (v,a,s) ty = Safe.arity5 ~ty:ty ~code:v ~against:a ~source:(brackets s)
+let expr1 (v,a,s) ty ?(apply=identity) = Safe.arity1 ~ty:ty ~code:(apply v) ~solution:a ~source:(brackets s)
+let expr2 (v,a,s) ty ?(apply=identity) = Safe.arity2 ~ty:ty ~code:(apply v) ~solution:a ~source:(brackets s)
+let expr3 (v,a,s) ty ?(apply=identity) = Safe.arity3 ~ty:ty ~code:(apply v) ~solution:a ~source:(brackets s)
+let expr4 (v,a,s) ty ?(apply=identity) = Safe.arity4 ~ty:ty ~code:(apply v) ~solution:a ~source:(brackets s)
+let expr5 (v,a,s) ty ?(apply=identity) = Safe.arity5 ~ty:ty ~code:(apply v) ~solution:a ~source:(brackets s)
 
 let value_support ty code solution source equal = 
   if equal code solution 
@@ -292,6 +314,7 @@ let name code ty ?(equal=(=)) () =
   let source = code in
   let vcode =    Get.value ~modname:"Code"     code ty
   and vsolution = Get.value ~modname:"Solution" code ty in
+
   value_support ty vcode vsolution source equal
 
 let expr (code,sol,source) ty ?(equal=(=)) () = 

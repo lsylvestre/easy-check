@@ -1,11 +1,11 @@
 
-type question
+type question = unit -> Report.t
 
 val question : 
-  string -> ?points:int -> (unit -> Report.t) -> question
+  string -> ?points:int -> question -> question
 
 val questions :
-  ?prefix:string -> ?points:int -> (unit -> Report.t) list -> question list
+  ?prefix:string -> ?points:int -> question list -> question list
 
 val set :
   ?forbidden_modules:string list -> question list -> unit

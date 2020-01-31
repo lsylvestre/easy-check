@@ -1,3 +1,5 @@
+open Falsify
+
 val default_stdout_equal : (string -> string -> bool) ref
 val default_stderr_equal : (string -> string -> bool) ref
 
@@ -14,110 +16,86 @@ val default_stderr_equal : (string -> string -> bool) ref
 *)
 type 'a testresult
 
-val name1 : 
-  string -> ('a -> 'b) Ty.ty ->
-  ?equal:('b -> 'b -> bool) ->
-  ?exn_equal:(exn -> exn -> bool) ->
-  ?stdout_equal:(string -> string -> bool) ->
-  ?stderr_equal:(string -> string -> bool) ->
-  ?testers:(('a, 'b testresult) Check_support.tester list) ->
-  'a list ->
-  Report.t
+val check :
+      show_argument:('a -> string) ->
+      show_result:('b -> string) ->
+      code:('a -> 'b) ->
+      solution:('a -> 'b) ->
+      source:string ->
+      ?equal:('b -> 'b -> bool) ->
+      ?exn_equal:(exn -> exn -> bool) ->
+      ?stdout_equal:(string -> string -> bool) ->
+      ?stderr_equal:(string -> string -> bool) ->
+      ?testers:('a, 'b testresult) tester list ->
+      'a list -> Report.t
 
-val name2 :
-  string -> ('a -> 'b -> 'c) Ty.ty ->
-  ?equal:('c -> 'c -> bool) ->
+
+type ('v,'args,'ret) check = 
+  'v Ty.ty ->
+  ?apply:('v -> 'v) -> 
+  ?equal:('ret -> 'ret -> bool) ->
   ?exn_equal:(exn -> exn -> bool) ->
   ?stdout_equal:(string -> string -> bool) ->
   ?stderr_equal:(string -> string -> bool) ->
-  ?testers:((('a * 'b) as 'args, 'c testresult) Check_support.tester list) ->
-  'args list ->
-  Report.t
+  ?testers:(('args, 'ret testresult) tester list) ->
+  'args list -> Report.t
+
+type name = string
+type 'e expr = 'e * 'e * string
+
+
+val name1 : 
+  name -> 
+   ('a1 -> 'ret, 'a1, 'ret) check
+
+val name2 : 
+  name ->
+   ('a1 -> 'a2 -> 'ret, 'a1 * 'a2, 'ret) check
 
 val name3 :
-  string -> ('a -> 'b -> 'c -> 'd) Ty.ty ->
-  ?equal:('d -> 'd -> bool) ->
-  ?exn_equal:(exn -> exn -> bool) ->
-  ?stdout_equal:(string -> string -> bool) ->
-  ?stderr_equal:(string -> string -> bool) ->
-  ?testers:((('a * 'b * 'c) as 'args, 'd testresult) Check_support.tester list) ->
-  'args list ->
-  Report.t
+  name ->
+  ('a1 -> 'a2 -> 'a3 -> 'ret, 'a1 * 'a2 * 'a3, 'ret) check
 
 val name4 :
-  string -> ('a -> 'b -> 'c -> 'd -> 'e) Ty.ty ->
-  ?equal:('e -> 'e -> bool) ->
-  ?exn_equal:(exn -> exn -> bool) ->
-  ?stdout_equal:(string -> string -> bool) ->
-  ?stderr_equal:(string -> string -> bool) ->
-  ?testers:((('a * 'b * 'c * 'd) as 'args, 'e testresult) Check_support.tester list) ->
-  'args list ->
-  Report.t
+  name ->
+  ('a1 -> 'a2 -> 'a3 -> 'a4 -> 'ret, 
+    'a1 * 'a2 * 'a3 * 'a4, 'ret) check
 
 val name5 :
-  string -> ('a -> 'b -> 'c -> 'd -> 'e -> 'f) Ty.ty ->
-  ?equal:('f -> 'f -> bool) ->
-  ?exn_equal:(exn -> exn -> bool) ->
-  ?stdout_equal:(string -> string -> bool) ->
-  ?stderr_equal:(string -> string -> bool) ->
-  ?testers:((('a * 'b * 'c * 'd * 'e) as 'args, 'f testresult) Check_support.tester list) ->
-  'args list ->
-  Report.t
+  name -> 
+  ('a1 -> 'a2 -> 'a3 -> 'a4 -> 'a5 -> 'ret,
+  'a1 * 'a2 * 'a3 * 'a4 * 'a5, 
+  'ret) check
 
 val expr1 :
-  ((('a -> 'b) as 'expr) * 'expr * string) -> 
-  'expr Ty.ty ->
-  ?equal:('b -> 'b -> bool) ->
-  ?exn_equal:(exn -> exn -> bool) ->
-  ?stdout_equal:(string -> string -> bool) ->
-  ?stderr_equal:(string -> string -> bool) ->
-  ?testers:(('a, 'b testresult) Check_support.tester list) ->
-  'a list ->
-  Report.t
+  ('a1 -> 'ret) expr ->
+   ('a1 -> 'ret, 
+   'a1, 
+   'ret) check
 
 val expr2 :
-  ((('a -> 'b -> 'c) as 'expr) * 'expr * string) -> 
-  'expr Ty.ty ->
-  ?equal:('c -> 'c -> bool) ->
-  ?exn_equal:(exn -> exn -> bool) ->
-  ?stdout_equal:(string -> string -> bool) ->
-  ?stderr_equal:(string -> string -> bool) ->
-  ?testers:((('a * 'b) as 'args, 'c testresult) Check_support.tester list) -> 
-  'args list ->
-  Report.t
+  ('a1 -> 'a2 -> 'ret) expr ->
+   ('a1 -> 'a2 -> 'ret,
+    'a1 * 'a2,  
+    'ret) check
 
 val expr3 :
-  ((('a -> 'b -> 'c -> 'd) as 'expr) * 'expr * string) -> 
-  'expr Ty.ty ->  
-  ?equal:('d -> 'd -> bool) ->
-  ?exn_equal:(exn -> exn -> bool) ->
-  ?stdout_equal:(string -> string -> bool) ->
-  ?stderr_equal:(string -> string -> bool) ->
-  ?testers:((('a * 'b * 'c) as 'args, 'd testresult) Check_support.tester list) -> 
-  'args list ->
-  Report.t
+  ('a1 -> 'a2 -> 'a3 -> 'ret) expr ->
+    ('a1 -> 'a2 -> 'a3 -> 'ret,
+    'a1 * 'a2 * 'a3, 
+    'ret) check
 
 val expr4 :
-  ((('a -> 'b -> 'c -> 'd -> 'e) as 'expr) * 'expr * string) ->
-  'expr Ty.ty ->
-  ?equal:('e -> 'e -> bool) ->
-  ?exn_equal:(exn -> exn -> bool) ->
-  ?stdout_equal:(string -> string -> bool) ->
-  ?stderr_equal:(string -> string -> bool) ->
-  ?testers:((('a * 'b * 'c * 'd) as 'args, 'e testresult) Check_support.tester list) -> 
-  'args list ->
-  Report.t
+  ('a1 -> 'a2 -> 'a3 -> 'a4 -> 'ret) expr ->
+    ('a1 -> 'a2 -> 'a3 -> 'a4 -> 'ret, 
+    'a1 * 'a2 * 'a3 * 'a4, 
+    'ret) check
 
 val expr5 : 
-  ((('a -> 'b -> 'c -> 'd -> 'e -> 'f) as 'expr) * 'expr * string) ->
-  'expr Ty.ty ->
-  ?equal:('f -> 'f -> bool) ->
-  ?exn_equal:(exn -> exn -> bool) ->
-  ?stdout_equal:(string -> string -> bool) ->
-  ?stderr_equal:(string -> string -> bool) ->
-  ?testers:((('a * 'b * 'c * 'd * 'e) as 'args, 'f testresult) Check_support.tester list) -> 
-  'args list ->
-  Report.t
+ ('a1 -> 'a2 -> 'a3 -> 'a4 -> 'a5 -> 'ret) expr ->
+   ('a1 -> 'a2 -> 'a3 -> 'a4 -> 'a5 -> 'ret,
+   'a1 * 'a2 * 'a3 * 'a4 * 'a5, 
+   'ret) check
 
 
 val name : string -> 'a Ty.ty -> ?equal:('a -> 'a -> bool) -> unit -> Report.t
