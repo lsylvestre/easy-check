@@ -12,5 +12,8 @@ $ make && make opaminstall
 $ make testrun
     ## Ouvir localhost:8080
 ^C
-$ cd ..
+$ cd ../demo
+$ make
+^C
+$ make clean
 ````
