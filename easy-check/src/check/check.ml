@@ -43,7 +43,7 @@ module Check_tools = struct
                    ?(stderr_equal=(!default_stderr_equal)) () = 
         (fun v1 v2 ->
           match v1,v2 with
-          | Error Undefined,_ | _,Error Undefined -> raise Undefined
+          | Error (Learnocaml_internal.Undefined as e),_ | _,Error (Learnocaml_internal.Undefined as e) -> raise e
           | Error e, Error e' -> exn_equal e e' 
           | Ok (x1,stdout1,stderr1), Ok (x2,stdout2,stderr2)
             -> (equal x1 x2) && (stdout_equal stdout1 stdout2) && (stderr_equal stderr1 stderr2)
