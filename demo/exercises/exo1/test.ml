@@ -1,3 +1,5 @@
+open Easy_check
+
 let q1 () =
   Assume.compatible "identity" [%ty : 'a -> 'a]; 
   Check.name1 "identity" [%ty : unit -> unit]  

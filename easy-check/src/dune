@@ -1,0 +1,17 @@
+(copy_files# assume/*)
+(copy_files# check/*)
+(copy_files# get/*)
+(copy_files# protect/*)
+(copy_files# result/*)
+(copy_files# show/*)
+(copy_files# test_env/*)
+(copy_files# testers/*)
+(copy_files# translation/*)
+
+(library
+ (name easy_check)
+ (public_name easy_check)
+ (wrapped true)
+ (modes byte)
+ (libraries learn-ocaml.test_lib)
+ (flags (:standard -warn-error -A -open Test_lib.Open_me)))

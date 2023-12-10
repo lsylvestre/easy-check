@@ -25,8 +25,9 @@ try
 with
 | Fail report ->
    report
-| Undefined -> let text = [ R.Text ((Translation.translation ()).not_yet_implemented) ] in
-               [R.Message (text, R.Failure)]
+| Learnocaml_internal.Undefined ->
+  let text = [ R.Text ((Translation.translation ()).not_yet_implemented) ] in
+  [R.Message (text, R.Failure)]
 | (e : exn) ->
    let text = [
        R.Text ((Translation.translation ()).the_following_exception_is_raised_and_never_caught);

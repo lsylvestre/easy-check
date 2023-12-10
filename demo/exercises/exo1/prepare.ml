@@ -1,2 +1,1 @@
-exception Undefined
-let __ = (fun _ -> raise Undefined)
+let __ = (fun _ -> raise Learnocaml_internal.Undefined)
