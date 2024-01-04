@@ -273,6 +273,7 @@ module Tail_rec = struct
     | Pexp_apply (e,es) -> 
       (let tail' = match e with 
                   | {pexp_desc=Pexp_ident {txt=Lident "||"}} -> tail
+                  | {pexp_desc=Pexp_ident {txt=Lident "&&"}} -> tail
                   | _ -> false 
        in
        try 
