@@ -334,6 +334,7 @@ module Tail_rec = struct
         let idents = idents_of_value_bindings bds in
         if List.mem name idents then (recflag,bds) 
         else aux r
+    | _ :: r -> aux r
     in aux code_ast
     
   (* [globals name] rend la liste des identificateurs déclarés dans
